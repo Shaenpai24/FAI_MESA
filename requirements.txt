@@ -1,0 +1,8 @@
+# For Mesa 3.3.0 (console version only)
+mesa==3.3.0
+numpy>=1.21.0
+
+# For newer Mesa with visualization (uncomment the lines below and comment out mesa==3.3.0)
+# mesa>=2.0.0
+# matplotlib>=3.5.0
+# pandas>=1.3.0

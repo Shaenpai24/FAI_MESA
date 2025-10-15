@@ -1,0 +1,87 @@
+body {
+    font-family: sans-serif;
+    margin: 20px;
+    background-color: #f0f0f0;
+}
+
+h1,
+h2 {
+    text-align: center;
+    color: #333;
+}
+
+#main-container {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+}
+
+#simulation-grid {
+    display: grid;
+    grid-template-columns: repeat(20, 20px);
+    grid-template-rows: repeat(20, 20px);
+    border: 2px solid #333;
+    background-color: #fff;
+}
+
+.grid-cell {
+    width: 20px;
+    height: 20px;
+    box-sizing: border-box;
+}
+
+.agent {
+    background-color: blue;
+    border-radius: 50%;
+}
+
+.resource {
+    background-color: green;
+}
+
+#controls-and-status {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#controls,
+#agent-status {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#controls h2,
+#agent-status h2 {
+    margin-top: 0;
+}
+
+#controls button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #4caf50;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#controls button:hover {
+    background-color: #45a049;
+}
+
+#status-content {
+    white-space: pre-wrap;
+}
+
+#results-chart {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

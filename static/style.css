@@ -1,0 +1,57 @@
+body {
+    font-family: sans-serif;
+    margin: 20px;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+#grid-container {
+    display: grid;
+    grid-template-columns: repeat(10, 30px);
+    grid-template-rows: repeat(10, 30px);
+    border: 2px solid #333;
+    background-color: #fff;
+    margin-top: 20px;
+}
+
+.grid-cell {
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+}
+
+.survivor {
+    background-color: blue;
+    border-radius: 50%;
+}
+
+.game_node {
+    background-color: green;
+}
+
+.game_node.active {
+    background-color: lightgreen;
+    border: 2px solid green;
+}
+
+.obstacle {
+    background-color: #555;
+}
+
+.path {
+    background-color: rgba(0, 0, 255, 0.2);
+}
+
+#controls,
+#info {
+    margin-top: 20px;
+    text-align: center;
+}
