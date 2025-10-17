@@ -1,4 +1,3 @@
-
 from mesa import Agent
 import random
 from collections import defaultdict
@@ -15,6 +14,7 @@ def heuristic(a, b):
 def find_path_astar(model, start, goal):
     if not start or not goal:
         return None
+
     open_set = [(0, start)]
     came_from = {}
     g_score = {start: 0}
@@ -55,21 +55,30 @@ def find_path_astar(model, start, goal):
 # ### AGENT CLASSES ###
 # ===================================================================
 
+def make_hashable_state(s):
+    """Recursively converts a dictionary state into a hashable tuple."""
+    if s is None: return None
+    # This handles lists inside the dictionary's values, making the state fully hashable
+    return tuple(sorted([(k, tuple(v) if isinstance(v, list) else v) for k, v in s.items()]))
+
 class ObstacleAgent(Agent):
     def __init__(self, unique_id, model):
-        super().__init__(unique_id, model)
+        self.unique_id = unique_id
+        self.model = model
+        self.pos = None
 
     def step(self):
         pass
 
 class SurvivorAgent(Agent):
-    def __init__(self, unique_id, model, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0):
-        super().__init__(unique_id, model)
+    def __init__(self, unique_id, model, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, q_table=None):
+        self.unique_id = unique_id
+        self.model = model
+        self.pos = None
         self.score = 0
         self.mode = "NAVIGATING"
         self.path = []
         self.path_index = 0
-        self.q_games = defaultdict(lambda: defaultdict(float))
         self.lr = learning_rate
         self.gamma = discount_factor
         self.epsilon = exploration_rate
@@ -77,6 +86,11 @@ class SurvivorAgent(Agent):
         self.epsilon_min = 0.05
         self.current_game_node = None
         self.game_state = None
+
+        if q_table is not None:
+            self.q_games = q_table
+        else:
+            self.q_games = defaultdict(lambda: defaultdict(float))
 
     def step(self):
         if self.mode == "NAVIGATING":
@@ -99,7 +113,7 @@ class SurvivorAgent(Agent):
             next_pos = self.path[self.path_index]
             self.model.grid.move_agent(self, next_pos)
             self.path_index += 1
-        else: # If path is blocked or ends, find a new one
+        else:
             self.find_new_path()
 
     def find_new_path(self):
@@ -123,9 +137,9 @@ class SurvivorAgent(Agent):
     def wander(self):
         if not self.pos: return
         neighbors = self.model.grid.get_neighborhood(self.pos, moore=False, include_center=False)
-        valid_neighbors = [n for n in neighbors if self.model.grid.is_cell_empty(n)]
+        valid_neighbors = [n for n in neighbors if not any(isinstance(agent, (ObstacleAgent, GameNodeAgent)) for agent in self.model.grid.get_cell_list_contents(n))]
         if valid_neighbors:
-            new_pos = self.random.choice(valid_neighbors)
+            new_pos = self.model.random.choice(valid_neighbors)
             self.model.grid.move_agent(self, new_pos)
 
     def play_game(self):
@@ -150,32 +164,41 @@ class SurvivorAgent(Agent):
         actions = self.current_game_node.get_possible_actions(state)
         if not actions: return None
 
-        if self.random.random() < self.epsilon:
-            return self.random.choice(actions)
+        if self.model.random.random() < self.epsilon:
+            return self.model.random.choice(actions)
         else:
-            q_values = {action: self.q_games[str(state)][action] for action in actions}
+            # CORRECTED: Use the same hashable state key for reading from the Q-table.
+            state_key = make_hashable_state(state)
+            q_values = {action: self.q_games[state_key][action] for action in actions}
             return max(q_values, key=q_values.get)
 
     def learn_game(self, state, action, reward, next_state):
         if action is None: return
-        state_str = str(state)
-        next_state_str = str(next_state)
 
-        current_q = self.q_games[state_str][action]
-        next_actions = self.current_game_node.get_possible_actions(next_state)
+        state_key = make_hashable_state(state)
+        next_state_key = make_hashable_state(next_state)
+
+        current_q = self.q_games[state_key][action]
         max_next_q = 0
-        if next_actions:
-            max_next_q = max(self.q_games[next_state_str].get(next_action, 0) for next_action in next_actions)
+
+        if next_state_key:
+            next_actions = self.current_game_node.get_possible_actions(next_state)
+            if next_actions:
+                max_next_q = max(self.q_games[next_state_key].get(next_action, 0) for next_action in next_actions)
 
         new_q = current_q + self.lr * (reward + self.gamma * max_next_q - current_q)
-        self.q_games[state_str][action] = new_q
+        self.q_games[state_key][action] = new_q
 
     def start_game(self, game_node):
         self.mode = "PLAYING_GAME"
         self.current_game_node = game_node
         self.game_state = game_node.start_game()
+        self.model.last_game_name = ""
+        self.model.last_game_result = ""
 
     def end_game(self, success):
+        # CORRECTED: Fixed typo `current_game__node` to `current_game_node`
+        self.model.record_game_result(self.current_game_node.game_type, success)
         self.model.complete_game_node(self.current_game_node, success)
         self.mode = "NAVIGATING"
         self.current_game_node = None
@@ -187,10 +210,12 @@ class GameNodeAgent(Agent):
     COLORS = ['red', 'green', 'blue', 'yellow', 'purple', 'orange']
 
     def __init__(self, unique_id, model, difficulty=1):
-        super().__init__(unique_id, model)
+        self.unique_id = unique_id
+        self.model = model
+        self.pos = None
         self.active = False
-        self.difficulty = max(1, min(difficulty, 6))
-        self.game_type = random.choice(self.GAME_TYPES)
+        self.difficulty = max(1, min(difficulty, 3))
+        self.game_type = self.model.random.choice(self.GAME_TYPES)
         self.game_state = {}
 
     def step(self):
@@ -200,17 +225,22 @@ class GameNodeAgent(Agent):
         self.active = True
         self.game_state = {'type': self.game_type}
         if self.game_type == 'color_match':
-            self.game_state['target_color'] = self.random.choice(self.COLORS[:self.difficulty+1])
+            self.game_state['target_color'] = self.model.random.choice(self.COLORS[:self.difficulty+1])
         elif self.game_type == 'simon_says':
-            self.game_state['sequence'] = [self.random.choice(self.COLORS[:self.difficulty+1]) for _ in range(self.difficulty)]
+            self.game_state['sequence'] = [self.model.random.choice(self.COLORS[:self.difficulty+1]) for _ in range(self.difficulty)]
             self.game_state['player_index'] = 0
         elif self.game_type == 'sequence_memory':
-            self.game_state['sequence'] = [self.random.choice(self.COLORS[:self.difficulty+1]) for _ in range(self.difficulty + 1)]
+            self.game_state['sequence'] = [self.model.random.choice(self.COLORS[:self.difficulty+1]) for _ in range(self.difficulty + 1)]
             self.game_state['player_index'] = 0
         elif self.game_type == 'pattern_recognition':
-            base_pattern = [self.random.choice(self.COLORS[:2]) for _ in range(2)]
-            self.game_state['sequence'] = base_pattern * (self.difficulty // 2)
-            self.game_state['correct_next'] = self.game_state['sequence'][0]
+            base_pattern = [self.model.random.choice(self.COLORS[:2]) for _ in range(2)]
+            multiplier = (self.difficulty // 2) + 1
+            self.game_state['sequence'] = base_pattern * multiplier
+            if self.game_state['sequence']:
+                self.game_state['correct_next'] = self.game_state['sequence'][0]
+            else:
+                self.game_state['sequence'] = base_pattern
+                self.game_state['correct_next'] = self.game_state['sequence'][0]
         return self.get_game_state()
 
     def get_game_state(self):
@@ -233,7 +263,7 @@ class GameNodeAgent(Agent):
         elif self.game_type == 'simon_says':
             seq = self.game_state['sequence']
             idx = self.game_state['player_index']
-            if action == seq[idx]:
+            if idx < len(seq) and action == seq[idx]:
                 self.game_state['player_index'] += 1
                 success = True
                 if self.game_state['player_index'] >= len(seq):
@@ -247,7 +277,7 @@ class GameNodeAgent(Agent):
         elif self.game_type == 'sequence_memory':
             seq = self.game_state['sequence']
             idx = self.game_state['player_index']
-            if action == seq[idx]:
+            if idx < len(seq) and action == seq[idx]:
                 self.game_state['player_index'] += 1
                 success = True
                 if self.game_state['player_index'] >= len(seq):
